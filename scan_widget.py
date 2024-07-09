@@ -1,9 +1,12 @@
 from PyQt6.QtWidgets import QWidget, QFormLayout, QHBoxLayout, QPushButton, QLabel, QLineEdit
-from PyQt6.QtGui import QPixmap
+from PyQt6.QtGui import QPixmap, QImage
 from PyQt6.QtCore import QThread, Qt
 
 from config import config
 import os
+
+import cv2
+from visual_inspection import inspection
 
 class ScanWidget(QWidget):
     def __init__(self, name, device) -> None:
@@ -44,11 +47,18 @@ class ScanWidget(QWidget):
         layout.addWidget(optionsWidget)
 
         # Scan Out
-        self.label = QLabel("Scan result will show here")
-        label.setMaximumWidth(512)
-        label.setMaximumHeight(786)
-        label.setMinimumWidth(512)
-        layout.addWidget(self.label)
+        self.result_raw = QLabel("Scan result will show here")
+        self.result_raw.setMaximumWidth(512)
+        self.result_raw.setMaximumHeight(786)
+        self.result_raw.setMinimumWidth(512)
+        layout.addWidget(self.result_raw)
+
+        # Inspection Out
+        self.result = QLabel("Inspection result will show here")
+        self.result.setMaximumWidth(512)
+        self.result.setMaximumHeight(786)
+        self.result.setMinimumWidth(512)
+        layout.addWidget(self.result)
         
         layout.addStretch()
 
@@ -58,7 +68,8 @@ class ScanWidget(QWidget):
         # Disable interface
         self.scan_button.setEnabled(False)
         self.scan_button.setText("Scanning In Progress...")
-        self.label.setText("Scanning In Progress...")
+        self.result_raw.setText("Scanning In Progress...")
+        self.result.setText("Scanning In Progress...")
 
         # Make out dir
         if not os.path.exists(config.getOutputDir()):
@@ -70,12 +81,29 @@ class ScanWidget(QWidget):
         self.scan_thread.start()
 
     def finish_scan(self) -> None:
-        # Load iamge
-        map = QPixmap(f"{ config.getOutputDir() }/_{ self.name }.pnm")
-        height = min(self.label.maximumHeight(), map.height())
-        width = min(self.label.maximumWidth(), map.width())
+        image_path = f"{ config.getOutputDir() }/_{ self.name }.pnm"
+        self.image = cv2.imread(image_path)
+
+        # Set raw image
+        height, width, channel = self.image.shape
+        image = QImage(self.image.data, width, height, width * 3, QImage.Format.Format_RGB888)
+        map = QPixmap(image)
+        height = min(self.result_raw.maximumHeight(), map.height())
+        width = min(self.result_raw.maximumWidth(), map.width())
         map = map.scaled(height, width, Qt.AspectRatioMode.KeepAspectRatio)
-        self.label.setPixmap(map)
+        self.result_raw.setPixmap(map)
+
+        # Run Inspection
+        self.inspection_result = inspection.run_inspection(self.image)
+
+        # Set Result image
+        height, width, channel = self.inspection_result.annotated.shape
+        image = QImage(self.inspection_result.annotated.data, width, height, width * 3, QImage.Format.Format_RGB888)
+        map = QPixmap(image)
+        height = min(self.result_raw.maximumHeight(), map.height())
+        width = min(self.result_raw.maximumWidth(), map.width())
+        map = map.scaled(height, width, Qt.AspectRatioMode.KeepAspectRatio)
+        self.result.setPixmap(map)
 
         # Enable interface
         self.scan_button.setEnabled(True)
@@ -84,10 +112,16 @@ class ScanWidget(QWidget):
 
     # 'Save' the image
     def save_scan(self) -> None:
-        os.rename(f"{ config.getOutputDir() }/_{ self.name }.pnm", f"{ config.getOutputDir() }/{ self.barcode.text() }.pnm")
+        out_raw = f"{ config.getOutputDir() }/{ self.barcode.text() }-raw.png"
+        out_annotated = f"{ config.getOutputDir() }/{ self.barcode.text() }-annotated.png"
+
+        cv2.imwrite(out_raw, self.image)
+        cv2.imwrite(out_annotated, self.inspection_result.annotated)
+
         self.save_button.setEnabled(False)
         self.scan_button.setText("Scan")
-        self.label.setText("Scan result will show here")
+        self.result_raw.setText("Scan result will show here")
+        self.result.setText("Inspection result will show here")
         self.barcode.clear()
 
 # Self-explanatory
