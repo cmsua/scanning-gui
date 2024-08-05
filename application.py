@@ -1,5 +1,5 @@
 from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel
-from scan_widget import ScanWidget
+from inspector_widget import InspectorWidget
 
 import sys
 
@@ -20,7 +20,7 @@ class MainWindow(QMainWindow):
 
         # Scanners
         scanner_layout = QHBoxLayout()
-        scanner_layout.addWidget(ScanWidget("Scanner", "hpaio:/usb/Photosmart_Prem_C310_series?serial=CN11D213Q405KM"))
+        scanner_layout.addWidget(InspectorWidget("Machine 1", "/dev/ttyACM0"))
 
         scanner_widget = QWidget()
         scanner_widget.setLayout(scanner_layout)
